@@ -19,7 +19,7 @@ class LambdaLR():
 
 class Trainer():
     
-    def __init__(self, netG_A2B, netG_B2A, netD_B, lr_g=2e-4, lr_critic=5e-5, epochs=50, decay_epoch = 25, mini_batch_size=8, img_size=100, tr_data_name = None, critic_iter = 5, gpu_num = 0, input_nc=1, output_nc = 1):
+    def __init__(self, netG_A2B, netG_B2A, netD_B, save_name=None, lr_g=2e-4, lr_critic=5e-5, epochs=50, decay_epoch = 25, mini_batch_size=8, img_size=100, tr_data_name = None, critic_iter = 5, gpu_num = 0, input_nc=1, output_nc = 1, train_type = 'shuffle'):
         
         self.netG_A2B = netG_A2B
         self.netG_B2A = netG_B2A
@@ -29,9 +29,12 @@ class Trainer():
         self.criterion_cycle = torch.nn.L1Loss()
         self.criterion_identity = torch.nn.L1Loss()
         
+        self.save_weight_name = './weights/' + save_name + '_ep'
+        self.save_file_name = './result_data/' + save_name + '_result.mat'
         self.n_epochs = epochs
         self.critic_iter = critic_iter
         self.mini_batch_size = mini_batch_size
+        self.train_type = train_type
         
         # Optimizers & LR schedulers
         self.optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),lr=lr_g, betas=(0.5, 0.999))
@@ -47,7 +50,7 @@ class Trainer():
         transformed_dataset = NoisyImageDataset(hdf5_file=tr_data_name, root_dir='data/', transform=transforms.Compose(transforms_))
         self.dataloader = DataLoader(transformed_dataset, batch_size=mini_batch_size, shuffle=True, num_workers=4, drop_last=True)
 
-        self.logger = Logger(self.n_epochs, len(self.dataloader))
+        self.logger = Logger(self.n_epochs, len(self.dataloader), self.save_file_name)
 
         cuda_index = gpu_num
         
@@ -63,7 +66,10 @@ class Trainer():
         for epoch in range(self.n_epochs):
             for i, batch in enumerate(self.dataloader):
                 # Set model input
-                real_A = Variable(self.input_A.copy_(batch))
+                if self.train_type == 'shuffle':
+                    real_A = Variable(self.input_A.copy_(batch))
+                else:
+                    real_A = Variable(self.input_A.copy_(batch[0]))
                 
                 self.noise.resize_(self.mini_batch_size, 1, 1, 1).normal_(0, 1)
                 noisev = Variable(self.noise).cuda()
@@ -101,7 +107,7 @@ class Trainer():
                 # GAN loss
                 fake_B = self.netG_A2B(real_A, noisev)
                 g_loss = self.netD_B(fake_B)
-                g_loss = -g_loss.mean()*1.0
+                g_loss = -g_loss.mean()
                 g_cost = g_loss
 
                 # Identity loss
@@ -119,5 +125,7 @@ class Trainer():
                 self.optimizer_G.step()
 
                 # Progress report (http://localhost:8085)
-                self.logger.log({'loss_G': loss_G, 'loss_identity_A': (loss_identity_A), 'loss_cycle_ABA': (loss_cycle_ABA),'g_cost': (g_cost), 'Wasserstein_D': (Wasserstein_D)}, 
-                            images={'Zi': real_A[0], 'Zj_hat': fake_B[0], 'Zi_tilde': recovered_A[0]})
+                self.logger.log({'loss_G': loss_G, 'loss_identity_A': (loss_identity_A), 'loss_cycle_ABA': (loss_cycle_ABA), 'g_cost': (g_cost), 'Wasserstein_D': (Wasserstein_D)},images={'Zi': real_A[0], 'Zj_hat': fake_B[0], 'Zi_tilde': recovered_A[0]})
+                
+            #save generator netG_A2B
+            torch.save(netG_A2B.state_dict(), self.save_weight_name + epoch + '.w')

@@ -4,6 +4,7 @@ import random
 import time
 import datetime
 import numpy as np
+import scipy.io as sio
 
 from PIL import Image
 from torch.utils.data import Dataset
@@ -41,7 +42,7 @@ def tensor2image(tensor):
     return image.astype(np.uint8)
 
 class Logger():
-    def __init__(self, n_epochs, batches_epoch):
+    def __init__(self, n_epochs, batches_epoch, sv_file_name):
         self.viz = Visdom(port='8085')
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch
@@ -52,6 +53,8 @@ class Logger():
         self.losses = {}
         self.loss_windows = {}
         self.image_windows = {}
+        self.save_file_name = sv_file_name
+        self.loss_save = {}
 
 
     def log(self, losses=None, images=None):
@@ -89,11 +92,16 @@ class Logger():
                 if loss_name not in self.loss_windows:
                     self.loss_windows[loss_name] = self.viz.line(X=np.array([self.epoch]), Y=np.array([loss/self.batch]), 
                                                                     opts={'xlabel': 'epochs', 'ylabel': loss_name, 'title': loss_name})
+                    self.loss_save[loss_name] = []
+                    self.loss_save[loss_name].append(loss/self.batch)
                 else:
                     self.viz.line(X=np.array([self.epoch]), Y=np.array([loss/self.batch]), win=self.loss_windows[loss_name], update='append')
+                    self.loss_save[loss_name].append(loss/self.batch)
                 # Reset losses for next epoch
                 self.losses[loss_name] = 0.0
 
+            sio.savemat(self.save_file_name,{loss_name:self.loss_save[loss_name] for loss_name in self.loss_save})
+                        
             self.epoch += 1
             self.batch = 1
             sys.stdout.write('\n')
