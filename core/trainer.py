@@ -31,6 +31,7 @@ class Trainer():
         
         self.n_epochs = epochs
         self.critic_iter = critic_iter
+        self.mini_batch_size = mini_batch_size
         
         # Optimizers & LR schedulers
         self.optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),lr=lr_g, betas=(0.5, 0.999))
@@ -53,6 +54,7 @@ class Trainer():
         # Inputs & targets memory allocation
         Tensor = torch.cuda.FloatTensor
         self.input_A = Tensor(mini_batch_size, input_nc, img_size, img_size)
+        self.noise = torch.Tensor(mini_batch_size, 1, 1, 1)
         
         self.train()
         
@@ -62,6 +64,9 @@ class Trainer():
             for i, batch in enumerate(self.dataloader):
                 # Set model input
                 real_A = Variable(self.input_A.copy_(batch))
+                
+                self.noise.resize_(self.mini_batch_size, 1, 1, 1).normal_(0, 1)
+                noisev = Variable(self.noise).cuda()
 
                 # Train Dicriminator forward-loss-backward-update self.critic_iter times while 1 Generator forward-loss-backward-update
 
@@ -76,7 +81,7 @@ class Trainer():
         #             d_loss_real.backward(mone)
 
                     # Train with fake images
-                    fake_B = self.netG_A2B(real_A).detach()
+                    fake_B = self.netG_A2B(real_A, noisev)
                     d_loss_fake = self.netD_B(fake_B)
                     d_loss_fake = d_loss_fake.mean()
         #             d_loss_fake.backward(one)
@@ -94,18 +99,18 @@ class Trainer():
                 self.optimizer_G.zero_grad()
 
                 # GAN loss
-                fake_B = self.netG_A2B(real_A)
+                fake_B = self.netG_A2B(real_A, noisev)
                 g_loss = self.netD_B(fake_B)
-                g_loss = -g_loss.mean()*1
+                g_loss = -g_loss.mean()*1.0
                 g_cost = g_loss
 
                 # Identity loss
                 # G_B2A(A) should equal A if real A is fed
-                same_A = self.netG_B2A(real_A)
+                same_A = self.netG_B2A(real_A, noisev)
                 loss_identity_A = self.criterion_identity(same_A, real_A)*5.0
 
                 # Cycle loss
-                recovered_A = self.netG_B2A(fake_B)
+                recovered_A = self.netG_B2A(fake_B, noisev)
                 loss_cycle_ABA = self.criterion_cycle(recovered_A, real_A)*10.0
 
                 # Total loss

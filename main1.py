@@ -25,10 +25,20 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
 
         # Initial convolution block       
-        model = [   nn.ReflectionPad2d(3),
-                    nn.Conv2d(input_nc, 64, 7),
-                    nn.InstanceNorm2d(64),
-                    nn.ReLU(inplace=True) ]
+#         model = [   nn.ReflectionPad2d(3),
+#                     nn.Conv2d(input_nc, 64, 7),
+#                     nn.InstanceNorm2d(64),
+#                     nn.ReLU(inplace=True) ]
+        
+        self.pad2d_1 = nn.ReflectionPad2d(3)
+        self.conv2d_1 = nn.Conv2d(input_nc, 64, 7)
+        self.norm2d_1 = nn.InstanceNorm2d(64)
+        self.relu_1 = nn.ReLU(inplace=True) 
+        
+        self.rv_embedding = nn.Linear(1, 64)
+        self.tanh = nn.Tanh()
+        
+        model = []
 
         # Downsampling
         in_features = 64
@@ -60,8 +70,22 @@ class Generator(nn.Module):
 
         self.model = nn.Sequential(*model)
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x, z):
+        
+        out1 = self.pad2d_1(x)
+        out2 = self.conv2d_1(out1)
+        
+        
+        out1_1 = self.rv_embedding(z)
+        out1_2 = self.tanh(out1_1)
+        out1_3 = out1_2.view(-1,64,1,1)
+
+        out2_1 = out2*out1_3
+        
+        out3 = self.norm2d_1((out2_1))
+        out4 = self.relu_1((out3))
+        
+        return self.model(out4)
 
 class Discriminator(torch.nn.Module):
     def __init__(self, channels):
@@ -122,7 +146,7 @@ mbs = 8
 im_size = 100
 tr_data_name = 'gan_trdata_20500_patch_120x120.hdf5'
 critic_iter = 5
-gpu_num = 0
+gpu_num = 2
 
 netG_A2B = Generator(input_nc, output_nc)
 netG_B2A = Generator(output_nc, input_nc)
