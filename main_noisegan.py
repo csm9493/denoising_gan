@@ -1,4 +1,4 @@
-from core.trainer import Trainer
+from core.noisegan import NoiseGAN
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -138,19 +138,18 @@ def weights_init_normal(m):
 input_nc = 1
 output_nc = 1
 
-lr_g = 2e-4
-lr_c = 5e-5
-ep = 50
-decay_ep = 25
-mbs = 8
-im_size = 100
-tr_data_name = 'gan_trdata_20500_patch_120x120.hdf5'
-critic_iter = 5
-gpu_num = 2
-tr_type = 'only_zi'
+lr_g = 2e-4 #learning rate for generator
+lr_c = 5e-5 #learning rate for critic
+ep = 20     #training epochs
+decay_ep = 10 #learning rate decay
+mbs = 32      #mini batch size 
+im_size = 100 #cropped image size
+tr_data_name = 'gan_trdata_20500_patch_120x120.hdf5' #training data name
+critic_iter = 5 #iterations for trainin critic
+tr_type = 'only_zi' #training type 'only_zi', 'shuffle'
 
-experiment_type = ''
-sv_name = '190313_cycleGAN_wGAN_experiment_'+ tr_type + experiment_type
+experiment_type = '_zi-zi_hat_mbs32_not_equal_loss_x0001_cycleloss_x5' #information about experiment (name for saving result file and weight)
+sv_name = '190322_cycleGAN_wGAN_experiment_'+ tr_type + experiment_type
 
 netG_A2B = Generator(input_nc, output_nc)
 netG_B2A = Generator(output_nc, input_nc)
@@ -165,9 +164,16 @@ netG_A2B.apply(weights_init_normal)
 netG_B2A.apply(weights_init_normal)
 netD_B.apply(weights_init_normal)
 
-trainer = Trainer(netG_A2B, netG_B2A, netD_B, save_name=sv_name, lr_g=lr_g, lr_critic=lr_c, epochs=ep, decay_epoch = decay_ep, 
+trainer = NoiseGAN(netG_A2B, netG_B2A, netD_B, save_name=sv_name, lr_g=lr_g, lr_critic=lr_c, epochs=ep, decay_epoch = decay_ep, 
                   mini_batch_size=mbs, img_size=im_size, tr_data_name = tr_data_name, critic_iter = critic_iter,
-                  gpu_num = gpu_num, input_nc=input_nc, output_nc = output_nc, train_type=tr_type)
+                  input_nc=input_nc, output_nc = output_nc, train_type=tr_type)
+
+
+
+
+
+
+
 
 
 
